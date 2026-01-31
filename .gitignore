@@ -3,3 +3,5 @@ dataset/
 output/
 __pycache__/
 preview_scenes/
+prompts/
+labels/

@@ -34,25 +34,36 @@ class WebSocketClient:
         """
         await self.ws_connect.send('init_florence')
         response = await self.ws_connect.recv()
+        if response != "ready_florence":
+            return None
+        print("Florence is ready")
+        meta_path  = await callback_func(*args, **kwargs)
+        if meta_path:
+            await self.ws_connect.send("success_florence")
+            return meta_path
+        return None
+            
+    async def run_llama(self, prompt_json_path):
+        await self.ws_connect.send('init_llama')
+        response = await self.ws_connect.recv()
+        if response == "ready_llama":
+            print("🚀 Server ready for Llama. (Logic will be implemented here)")
+            payload = {
+                "status": "run_llama",
+                "prompt_json_path": prompt_json_path,
+            }
+            await self.ws_connect.send(json.dumps(payload))
+            response = await self.ws_connect.recv()
+            res_data = json.loads(response)
 
-        if response == "ready_florence":
-            print("Florence is ready")
-            status = await callback_func(*args, **kwargs)
-            
-            if status == "success_florence":
-                await self.ws_connect.send(status)
+            if res_data.get("status") == "completed_llama":
+                print("✅ Llama inference completed.")
+                await self.ws_connect.send('success_llama')
                 return True
-            else:
-                return False
             
-    async def run_llama(self):
-        await self.ws.send('init_llama_3')
-        response = await self.ws.recv()
-        
-        if response == "ready_llama_3":
-            print("🚀 Server ready for Llama_3. (Logic will be implemented here)")
-            # Thực hiện logic Llama ở đây
-            return True
+            elif res_data.get("status") in ["failed_llama", "error_llama", "server_error"]:
+                print("❌ Llama failed:", res_data.get("message"))
+                return False
         return False
 
     async def close_ws(self):

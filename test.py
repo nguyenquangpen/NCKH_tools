@@ -1,11 +1,8 @@
-import h5py
+ 
+from label_mapper import LabelMapper
 
-file_path = "user_prompt_pool.h5"
-
-with h5py.File(file_path, "r") as f:
-    def print_structure(name, obj):
-        print(name, obj)
-
-    f.visititems(print_structure)
-
-
+LABEL_DIR = "labels"
+prompt_json_path = "prompts/video_30_prompts.json"
+meta_path = "output/_xMr-HKMfVA.mp4_metadata.json"
+mapper = LabelMapper("dataset/tvsum50_ver_1_1/ydata-tvsum50-v1_1/ydata-tvsum50-matlab/matlab/ydata-tvsum50.mat")
+mapper.map_labels(meta_path, output_dir=LABEL_DIR)
