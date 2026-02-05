@@ -2,6 +2,7 @@ import asyncio
 import websockets
 import json
 from config import *
+from embedding_storage import save_llama_embeddings
 
 class WebSocketClient:
     def __init__(self):
@@ -27,44 +28,72 @@ class WebSocketClient:
         """send data to server"""
         if self.ws_connect:
             await self.ws_connect.send(json.dumps(data))
+
+    # --- PHASE PREPARATION ---
+    async def prepare_florence(self):
+        await self.ws_connect.send('init_florence')
+        response = await self.ws_connect.recv()
+        if response == "ready_florence":
+            print("Florence is ready")
+            return True
+        return False
     
+    async def prepare_llama(self):
+        await self.ws_connect.send('init_llama')
+        response = await self.ws_connect.recv()
+        if response == "ready_llama":
+            print("Llama is ready")
+            return True
+        return False
+    
+    # --- PHASE TERMINATION  ---
+    async def finish_florence(self):
+        await self.ws_connect.send('success_florence')
+        response = await self.ws_connect.recv()
+        print(f"🧹 Florence Unload Status: {response}")
+        return True
+
+    async def finish_llama(self):
+        await self.ws_connect.send('success_llama')
+        response = await self.ws_connect.recv()
+        print(f"🧹 Llama Unload Status: {response}")
+        return True
+    
+    # --- CORE PROCESSING ---
     async def run_florence(self, callback_func, *args, **kwargs):
         """
         logic: send init --> wait for ready --> send per short data
         """
-        await self.ws_connect.send('init_florence')
-        response = await self.ws_connect.recv()
-        if response != "ready_florence":
-            return None
         print("Florence is ready")
         meta_path  = await callback_func(*args, **kwargs)
-        if meta_path:
-            await self.ws_connect.send("success_florence")
-            return meta_path
-        return None
+        return meta_path
             
-    async def run_llama(self, prompt_json_path):
-        await self.ws_connect.send('init_llama')
-        response = await self.ws_connect.recv()
-        if response == "ready_llama":
-            print("🚀 Server ready for Llama. (Logic will be implemented here)")
+    async def run_llama(self, prompt_json_path, video_id):
+        with open(prompt_json_path, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+        prompts = data.get("prompts", [])
+        for seg in prompts:
             payload = {
                 "status": "run_llama",
-                "prompt_json_path": prompt_json_path,
+                "segment_data": seg
             }
             await self.ws_connect.send(json.dumps(payload))
             response = await self.ws_connect.recv()
             res_data = json.loads(response)
-
             if res_data.get("status") == "completed_llama":
-                print("✅ Llama inference completed.")
-                await self.ws_connect.send('success_llama')
-                return True
-            
-            elif res_data.get("status") in ["failed_llama", "error_llama", "server_error"]:
-                print("❌ Llama failed:", res_data.get("message"))
+                embedding_status = save_llama_embeddings(
+                    video_id,
+                    res_data.get("x1"),
+                    res_data.get("x2")
+                )
+                if not embedding_status:
+                    print(f"❌ Saving embeddings failed for segment {seg.get('segment_id')}")
+                    return False
+                print(f"✅ Llama completed for segment {seg.get('segment_id')}")
+            else:
+                print(f"❌ Llama failed for segment {seg.get('segment_id')}: {res_data.get('message')}")
                 return False
-        return False
+        return True
 
     async def close_ws(self):
         if self.ws_connect:

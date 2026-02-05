@@ -2,16 +2,16 @@ import os
 
 class VideoIdMapper:
     TVSUM_IDS = [
-        "-esJrBWj2d8", "0tmA_C6XwfM", "37rzWOQsNIw", "3eYKfiOEJNs", "4wU_LUjG5Ic",
-        "91IHQYk1IQM", "98MoyGZKHXc", "AwmHb44_ouw", "Bhxk-O1Y7Ho", "E11zDS9XGzg",
-        "EE-bNr36nyA", "EYqVtI9YWJA", "GsAD1KT1xo8", "HT5vyqe0Xaw", "Hl-__g2gn_A",
-        "J0nA4VgnoCo", "JKpqYvAdIsw", "JgHubY5Vw3Y", "LRw_obCPUt0", "NyBmCxDoHJU",
-        "PJrm840pAUI", "RBCABdttQmI", "Se3oxnaPsz0", "VuWGsYPqAX8", "WG0MBPpPC6I",
-        "WxtbjNsCQ8A", "XkqCExn6_Us", "XzYM3PfTM4w", "Yi4Ij2NM7U4", "_xMr-HKMfVA",
-        "akI8YFjEmUw", "b626MiF1ew4", "byxOvuiIJV0", "cjibtmSLxQ4", "eQu1rNs0an0",
-        "fWutDQy1nnY", "gzDbaEs1Rlg", "i3wAGJaaktw", "iVt07TCkFM0", "jcoYJXDG9sw",
-        "kLxoNp-UchI", "oDXZc0tZe04", "qqR6AEXwxoQ", "sTEELN-vY30", "uGu_10sucQo",
-        "vdmoEJ5YbrQ", "xmEERLqJ2kU", "xwqBXPGE9pQ", "xxdtq8mxegs", "z_6gVvQb2d0",
+        "AwmHb44_ouw", "98MoyGZKHXc", "J0nA4VgnoCo", "gzDbaEs1Rlg", "XzYM3PfTM4w",
+        "HT5vyqe0Xaw", "sTEELN-vY30", "vdmoEJ5YbrQ", "xwqBXPGE9pQ", "akI8YFjEmUw",
+        "i3wAGJaaktw", "Bhxk-O1Y7Ho", "0tmA_C6XwfM", "3eYKfiOEJNs", "xxdtq8mxegs",
+        "WG0MBPpPC6I", "Hl-__g2gn_A", "Yi4Ij2NM7U4", "37rzWOQsNIw", "LRw_obCPUt0",
+        "cjibtmSLxQ4", "b626MiF1ew4", "XkqCExn6_Us", "GsAD1KT1xo8", "PJrm840pAUI",
+        "91IHQYk1IQM", "RBCABdttQmI", "z_6gVvQb2d0", "fWutDQy1nnY", "4wU_LUjG5Ic",
+        "VuWGsYPqAX8", "JKpqYvAdIsw", "xmEERLqJ2kU", "byxOvuiIJV0", "_xMr-HKMfVA",
+        "WxtbjNsCQ8A", "uGu_10sucQo", "EE-bNr36nyA", "Se3oxnaPsz0", "oDXZc0tZe04",
+        "qqR6AEXwxoQ", "EYqVtI9YWJA", "eQu1rNs0an0", "JgHubY5Vw3Y", "iVt07TCkFM0",
+        "E11zDS9XGzg", "NyBmCxDoHJU", "kLxoNp-UchI", "jcoYJXDG9sw", "-esJrBWj2d8"
     ]
 
     @classmethod
@@ -23,3 +23,15 @@ class VideoIdMapper:
             return f"video_{index + 1}"
         except ValueError:
             return pure_id
+    
+    @classmethod
+    def get_youtube_id(cls, alias_id):
+        """convert alias id like video_1 to youtube id"""
+        if alias_id.startswith("video_"):
+            try:
+                idx = int(alias_id.replace("video_", "")) - 1
+                if 0 <= idx < len(cls.TVSUM_IDS):
+                    return cls.TVSUM_IDS[idx]
+            except ValueError:
+                pass
+        return alias_id

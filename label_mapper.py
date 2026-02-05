@@ -2,6 +2,7 @@ import numpy as np
 import json
 import os
 import h5py
+from video_id_mapper import VideoIdMapper
 
 class LabelMapper:
     def __init__(self, mat_file_path):
@@ -17,11 +18,12 @@ class LabelMapper:
     def _get_video_gt_scores(self, video_id):
         video_refs = self.tvsum_data['video'][:].flatten()
         gt_refs = self.tvsum_data['gt_score'][:].flatten()
-        meta_id = video_id.replace(".mp4", "").strip()
-
+        target_youtube_id  = VideoIdMapper.get_youtube_id(video_id)
+        print(f"🔍 Mapping {video_id} to YouTube ID: {target_youtube_id }")
+        
         for i, v_ref in enumerate(video_refs):
             actual = self._matlab_str_to_py(v_ref)
-            if actual == meta_id:
+            if actual == target_youtube_id :
                 gt_ref = gt_refs[i]
                 scores = np.array(self.mat_data[gt_ref]).flatten()
                 return scores
@@ -31,7 +33,6 @@ class LabelMapper:
         """map ground truth scores to video metadata and save to json files"""
         with open(metadata_file_path, "r", encoding="utf-8") as f:
             meta = json.load(f)
-
         video_id = meta['video_id']
         n_frames = meta['n_frames']
         segments = meta['segments']
@@ -45,23 +46,19 @@ class LabelMapper:
         for seg in segments:
             s_idx = int(seg['start_frame'] * scale_factor)
             e_idx = int(seg['end_frame'] * scale_factor)
-
             s_idx = max(0, s_idx)
             e_idx = min(len(full_gt_scores) - 1, e_idx)
             seg_scores = full_gt_scores[s_idx : e_idx + 1]
-            
             if len(seg_scores) > 0:
                 avg_score = np.mean(seg_scores)
                 final_score = int(round(float(avg_score)))
                 final_score = max(1, min(5, final_score))
             else:
                 final_score = 1
-
             segment_labels.append({
                 "id": seg['id'],
                 "gt_score": final_score
             })
-
         if not os.path.exists(output_dir):
             os.makedirs(output_dir)
 
@@ -71,5 +68,38 @@ class LabelMapper:
                 "video_id": video_id,
                 "labels": segment_labels
             }, f, indent=2)
-            
         print(f"✅ Ground Truth Labels saved: {output_path}")
+
+# ... (Giữ nguyên class LabelMapper ở trên) ...
+
+if __name__ == "__main__":
+    # --- CẤU HÌNH ĐƯỜNG DẪN ĐỂ TEST ---
+    # Thay đổi các đường dẫn này cho đúng với máy của bạn
+    MAT_FILE = "dataset/tvsum50_ver_1_1/ydata-tvsum50-v1_1/ydata-tvsum50-matlab/matlab/ydata-tvsum50.mat"
+    
+    # Chọn một file metadata đã có sẵn trong thư mục output của bạn
+    # Ví dụ: "output/video_3_metadata.json"
+    TEST_METADATA_FILE = "output/video_3_metadata.json" 
+    
+    OUTPUT_LABEL_DIR = "labels_test" # Thư mục lưu kết quả test
+
+    # Kiểm tra xem file metadata có tồn tại không
+    if not os.path.exists(TEST_METADATA_FILE):
+        print(f"❌ Không tìm thấy file metadata: {TEST_METADATA_FILE}")
+        print("Mẹo: Hãy đảm bảo bạn đã chạy Phase 1 cho video này hoặc copy một file metadata vào thư mục output.")
+    else:
+        print(f"🚀 Đang test LabelMapper với file: {TEST_METADATA_FILE}")
+        
+        try:
+            # 1. Khởi tạo mapper
+            mapper = LabelMapper(MAT_FILE)
+            
+            # 2. Chạy hàm map_labels
+            mapper.map_labels(TEST_METADATA_FILE, output_dir=OUTPUT_LABEL_DIR)
+            
+            print(f"✅ Test hoàn tất! Kiểm tra kết quả tại thư mục: {OUTPUT_LABEL_DIR}")
+            
+        except Exception as e:
+            print(f"❌ Lỗi khi chạy test: {e}")
+            import traceback
+            traceback.print_exc()
