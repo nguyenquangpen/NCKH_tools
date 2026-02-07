@@ -9,10 +9,12 @@ from video_segmenter import VideoSegmenter
 from label_mapper import LabelMapper
 from video_id_mapper import VideoIdMapper
 from prompt_generator import PromptGenerator
+from h5_reader import H5DatasetReader
 
 OUTPUT_DIR = "output"
 PROMPT_DIR = "prompts"
 LABEL_DIR = "labels"
+DATASET_H5_PATH = "dataset/TVSum/TVSum/eccv16_dataset_tvsum_google_pool5.h5"
 LABELMAPPER = "dataset/tvsum50_ver_1_1/ydata-tvsum50-v1_1/ydata-tvsum50-matlab/matlab/ydata-tvsum50.mat"
 
 for d in [OUTPUT_DIR, PROMPT_DIR, LABEL_DIR]:
@@ -32,6 +34,55 @@ def save_video_metadata(video_id, result_meta, all_segments):
         json.dump(output_data, f, indent=2, ensure_ascii=False)
     print(f"✅ Metadata & Captions saved: {file_path}")
     return file_path
+
+
+async def _handle_dataset_florence_logic(video_path, ws_client, video_id):
+    """"""
+    reader = H5DatasetReader(DATASET_H5_PATH)
+    change_points = reader.get_video_change_points(video_id)
+    if not change_points:
+        print(f"❌ No change points found in H5 for {video_id}")
+        return None
+    segmenter = VideoSegmenter()
+    result = segmenter.load_fixed_scenes(video_path, change_points)
+    fps = result.get("fps", 1.0)
+    n_frames = result.get("n_frames", 0)
+    all_segments = []
+
+    try:
+        for i, (start, end) in enumerate(change_points):
+            short_data = segmenter.extract_single_shot(video_path, i, start, end)
+            if short_data:
+                payload = {
+                    "status": "run_florence",
+                    "shot_id": short_data["shot_id"],
+                    "image_b64": short_data["image_b64"]
+                }
+                print(f"🚀 Sending shot {i} for inference...")
+                await ws_client.send_data(payload)
+                response = await ws_client.ws_connect.recv()
+                res_json = json.loads(response)
+                if res_json.get("status") == "completed":
+                    segment_info = {
+                        "id": i,
+                        "start_frame": start,
+                        "end_frame": end,
+                        "start_time": round(start / fps, 2),
+                        "end_time": round(end / fps, 2),
+                        "caption": res_json.get("caption", "")
+                    }
+                    all_segments.append(segment_info)
+                else:
+                    print(f"⚠️ Inference failed for shot {i}")
+                    return None
+        if all_segments:
+            result_meta = {"fps": fps, "n_frames": n_frames}
+            meta_path = save_video_metadata(video_id, result_meta, all_segments)
+            return meta_path
+        return None
+    except Exception as e:
+        print("❌ Error during Florence handling:", e)
+        return None
 
 
 async def _handle_florence_logic(video_path, ws_client, video_id):
@@ -84,16 +135,29 @@ async def _handle_florence_logic(video_path, ws_client, video_id):
         print("❌ Error during Florence handling:", e)
         return None
     
-async def process_florence(video_path, ws_client):
+
+async def process_florence(video_path, ws_client, use_dataset_mode=True):
     try:
         video_filename = os.path.basename(video_path)
         canonical_id = VideoIdMapper.get_canonical_id(video_filename)
+        meta_path = os.path.join(OUTPUT_DIR, f"{canonical_id}_metadata.json")
+        prompt_path = os.path.join(PROMPT_DIR, f"{canonical_id}_prompts.json")
+        if os.path.exists(meta_path) and os.path.exists(prompt_path):
+            return {
+                "status": "success",
+                "canonical_id": canonical_id,
+                "meta_path": meta_path,
+                "prompt_path": prompt_path,
+                "skipped": True
+            }
+        logic_func = _handle_dataset_florence_logic if use_dataset_mode else _handle_florence_logic
         meta_path = await ws_client.run_florence(
-            _handle_florence_logic,
+            logic_func,
             video_path,
             ws_client,
             canonical_id
         )
+
         if not meta_path:
             return {"status": "error", "msg": "florence"}
         prompt_gen = PromptGenerator()
@@ -102,6 +166,7 @@ async def process_florence(video_path, ws_client):
             PROMPT_DIR,
             f"{canonical_id}_prompts.json"
         )
+
         return {
             "status": "success",
             "canonical_id": canonical_id,
@@ -111,78 +176,32 @@ async def process_florence(video_path, ws_client):
     except Exception as e:
         return {"status": "error", "msg": str(e)}
 
-async def process_llama(video_info, ws_client):
+
+async def process_llama(video_info, ws_client, traning_mode=True):
     if video_info["status"] != "success":
         return "skip"
     try:
         cid = video_info["canonical_id"]
+        label_path = os.path.join(LABEL_DIR, f"{cid}_labels.json")
+        if os.path.exists(label_path):
+            return "skip" 
         llama_success = await ws_client.run_llama(
             video_info["prompt_path"],
             cid
         )
         if not llama_success:
             return "failure_llama"
-        mapper = LabelMapper(LABELMAPPER)
-        mapper.map_labels(
-            video_info["meta_path"],
-            output_dir=LABEL_DIR
-        )
+        if not traning_mode:
+            mapper = LabelMapper(LABELMAPPER)
+            mapper.map_labels(
+                video_info["meta_path"],
+                output_dir=LABEL_DIR
+            )
         return "success"
     except Exception as e:
         print(f"❌ Error during Llama processing: {e}")
         return "failure_pipeline"
 
-
-# async def main_process(video_path):
-#     """Pipeline Orchestrator: Florence -> Prompts -> Llama-3 -> Labels"""
-#     ws_client = WebSocketClient()
-#     if not await ws_client.connect_ws():
-#         return "failure_connection"
-
-#     video_filename = os.path.basename(video_path)
-#     canonical_id = VideoIdMapper.get_canonical_id(video_filename)
-
-#     try:
-#         print(f"\n--- [1/4] Starting Florence-2 for {video_filename} ---")
-#         meta_path = await ws_client.run_florence(_handle_florence_logic, video_path, ws_client, canonical_id)
-#         if not meta_path:
-#             return "failure_florence"
-        
-#         print(f"\n--- [2/4] Generating Prompts for {canonical_id} ---")
-#         prompt_gen = PromptGenerator()
-#         prompt_gen.generate_prompts(meta_path, output_dir=PROMPT_DIR)
-#         prompt_json_path = os.path.join(PROMPT_DIR, f"{canonical_id}_prompts.json")
-        
-#         prompt_json_path = "prompts/video_30_prompts.json"
-#         meta_path = "output/_xMr-HKMfVA.mp4_metadata.json"
-        
-#         print(f"\n--- [3/4] Running Llama-3 for {canonical_id} ---")
-#         llama_success = await ws_client.run_llama(prompt_json_path, canonical_id)
-#         if not llama_success:
-#             return "failure_llama"
-        
-#         print(f"\n--- [4/4] Mapping Ground Truth Labels for {canonical_id} ---")
-#         mapper = LabelMapper("dataset/tvsum50_ver_1_1/ydata-tvsum50-v1_1/ydata-tvsum50-matlab/matlab/ydata-tvsum50.mat")
-#         mapper.map_labels(meta_path, output_dir=LABEL_DIR)
-
-#         return "success_florence"
-#     except Exception as e:
-#         print(f"❌ Pipeline Error: {e}")
-#         return "failure_pipeline"
-
-#     finally:
-#         await ws_client.close_ws()
-
-# def florence_callback(video_path):
-#     """Entry point for Florence processing."""
-#     return asyncio.run(main_process(video_path))
-
-# test thu video
-# if __name__ == "__main__":
-#     # Test thử
-#     video_path = "dataset/tvsum50_ver_1_1/ydata-tvsum50-v1_1/ydata-tvsum50-video/video/_xMr-HKMfVA.mp4"
-#     result = florence_callback(video_path)
-#     print(f"Final Status: {result}")
 
 def get_completed_florence_tasks():
     """Retrieve previously completed Florence tasks from output directory."""
@@ -201,6 +220,7 @@ def get_completed_florence_tasks():
             })
     return tasks
 
+
 async def run_phase_florence(video_paths):
     ws_client = WebSocketClient()
     if not await ws_client.connect_ws():
@@ -213,15 +233,19 @@ async def run_phase_florence(video_paths):
             return []
         
         for i, v_path in enumerate(video_paths):
+            v_name = os.path.basename(v_path)
+            cid = VideoIdMapper.get_canonical_id(v_name)
+            if os.path.exists(os.path.join(PROMPT_DIR, f"{cid}_prompts.json")):
+                continue
             print(f"📽️ Processing Florence [{i+1}/{len(video_paths)}]: {os.path.basename(v_path)}")
             res = await process_florence(v_path, ws_client)
             if res.get("status") == "success":
                 successful_tasks.append(res)
         await ws_client.finish_florence()
-    
     finally:
         await ws_client.close_ws()
     return successful_tasks
+
 
 async def run_phase_llama(tasks=None):
     if tasks is None:
@@ -240,22 +264,25 @@ async def run_phase_llama(tasks=None):
             print("Llama preparation failed")
             return
         for i, info in enumerate(tasks):
-            label_file = os.path.join(LABEL_DIR, f"{info['canonical_id']}_labels.json")
-            if os.path.exists(label_file):  
-                continue
-            print(f"📽️ Processing Llama [{i+1}/{len(tasks)}]: {info['canonical_id']}")
+            cid = info["canonical_id"]
+            print(f"📽️ Processing Llama [{i+1}/{len(tasks)}]: {cid}")
             res = await process_llama(info, ws_client)
-            print(f"{'✅' if res == 'success' else '❌'} Result: {res}")
-        
+            if res == "skip":
+                print(f"⏭️ Skipped Llama for {cid}, already processed.")
+            elif res == "success":
+                print(f"✅ Finished Llama [{i+1}/{len(tasks)}]: {cid}")
+            else:
+                print(f"❌ Failed Llama [{i+1}/{len(tasks)}]: {cid} - Status: {res}")
         await ws_client.finish_llama()
 
     finally:
         await ws_client.close_ws()
 
+
 if __name__ == "__main__":
     import glob
-    RUN_PHASE_1 = False
-    RUN_PHASE_2 = True
+    RUN_PHASE_1 = True
+    RUN_PHASE_2 = False
 
     if RUN_PHASE_1:
         VIDEO_DIR = "dataset/tvsum50_ver_1_1/ydata-tvsum50-v1_1/ydata-tvsum50-video/video" 

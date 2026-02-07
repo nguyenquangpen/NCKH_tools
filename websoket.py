@@ -72,6 +72,9 @@ class WebSocketClient:
         with open(prompt_json_path, 'r', encoding='utf-8') as f:
             data = json.load(f)
         prompts = data.get("prompts", [])
+        all_x1 = []
+        all_x2 = []
+
         for seg in prompts:
             payload = {
                 "status": "run_llama",
@@ -81,18 +84,15 @@ class WebSocketClient:
             response = await self.ws_connect.recv()
             res_data = json.loads(response)
             if res_data.get("status") == "completed_llama":
-                embedding_status = save_llama_embeddings(
-                    video_id,
-                    res_data.get("x1"),
-                    res_data.get("x2")
-                )
-                if not embedding_status:
-                    print(f"❌ Saving embeddings failed for segment {seg.get('segment_id')}")
-                    return False
-                print(f"✅ Llama completed for segment {seg.get('segment_id')}")
+                all_x1.append(res_data.get("x1"))
+                all_x2.append(res_data.get("x2"))
+                print(f"⏳ Llama processed segment {seg.get('segment_id')}")
             else:
                 print(f"❌ Llama failed for segment {seg.get('segment_id')}: {res_data.get('message')}")
                 return False
+        if all_x1 and all_x2:
+            print(f"💾 Saving Llama embeddings for video {video_id}...")
+            return save_llama_embeddings(video_id, all_x1, all_x2)
         return True
 
     async def close_ws(self):

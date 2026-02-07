@@ -7,14 +7,18 @@ from scenedetect import open_video, SceneManager
 from scenedetect.detectors import AdaptiveDetector 
 
 class VideoSegmenter:
-    def __init__(self, threshold = 2.7):
+    def __init__(self, threshold = 2.0):
         self.threshold = threshold
 
     def detect_scenes(self, video_path):
         """ Detect scenes in the video and return change points and segment info."""
         video = open_video(video_path)
         scene_manager = SceneManager()
-        scene_manager.add_detector(AdaptiveDetector(adaptive_threshold=self.threshold))
+        scene_manager.add_detector(AdaptiveDetector(
+            adaptive_threshold=self.threshold,
+            min_content_val=10.0,
+            min_scene_len=15
+            ))
         print("Detecting scenes...")
 
         scene_manager.detect_scenes(video)
@@ -56,6 +60,18 @@ class VideoSegmenter:
             "image_b64": img_b64
         }
 
+    def load_fixed_scenes(self, video_path, manual_change_points):
+        """ Load fixed scenes from manual change points """
+        cap = cv2.VideoCapture(video_path)
+        fps = cap.get(cv2.CAP_PROP_FPS)
+        n_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+        cap.release()
+
+        return {
+            "change_points": manual_change_points,
+            "n_frames": n_frames,
+            "fps": fps
+        }
 
     """
     Change Points: [[0, 764], [765, 2017], [2018, 2127], [2128, 2611], [2612, 3161], [3162, 4350], [4351, 5009], [5010, 6223], [6224, 6555], [6556, 7584]]
@@ -63,27 +79,3 @@ class VideoSegmenter:
     Total Number of Frames: 7585
     Frames per Second (FPS): 59.94005994005994
     """
-
-   
-# def export_scene_clips_ffmpeg(video_path, change_points, fps, out_dir, num_cuts=2):
-#     """ preview scene clips using ffmpeg based on change points."""
-#     if os.path.exists(out_dir):
-#         shutil.rmtree(out_dir)
-#     os.makedirs(out_dir, exist_ok=True)
-#     for i, (start, end) in enumerate(change_points[:num_cuts]):
-#         start_time = start / fps
-#         duration = (end - start + 1) / fps
-#         out_path = os.path.join(out_dir, f"scene_{i}.mp4")
-#         cmd = [
-#             "ffmpeg",
-#             "-y",
-#             "-ss", f"{start_time:.4f}",
-#             "-i", video_path,           
-#             "-t", f"{duration:.4f}",    
-#             "-c:v", "libx264",         
-#             "-preset", "ultrafast",   
-#             "-crf", "18",               
-#             out_path
-#         ]
-#         subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-#         print(f"Exported accurate scene clip to {out_path}")

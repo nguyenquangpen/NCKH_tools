@@ -69,37 +69,3 @@ class LabelMapper:
                 "labels": segment_labels
             }, f, indent=2)
         print(f"✅ Ground Truth Labels saved: {output_path}")
-
-# ... (Giữ nguyên class LabelMapper ở trên) ...
-
-if __name__ == "__main__":
-    # --- CẤU HÌNH ĐƯỜNG DẪN ĐỂ TEST ---
-    # Thay đổi các đường dẫn này cho đúng với máy của bạn
-    MAT_FILE = "dataset/tvsum50_ver_1_1/ydata-tvsum50-v1_1/ydata-tvsum50-matlab/matlab/ydata-tvsum50.mat"
-    
-    # Chọn một file metadata đã có sẵn trong thư mục output của bạn
-    # Ví dụ: "output/video_3_metadata.json"
-    TEST_METADATA_FILE = "output/video_3_metadata.json" 
-    
-    OUTPUT_LABEL_DIR = "labels_test" # Thư mục lưu kết quả test
-
-    # Kiểm tra xem file metadata có tồn tại không
-    if not os.path.exists(TEST_METADATA_FILE):
-        print(f"❌ Không tìm thấy file metadata: {TEST_METADATA_FILE}")
-        print("Mẹo: Hãy đảm bảo bạn đã chạy Phase 1 cho video này hoặc copy một file metadata vào thư mục output.")
-    else:
-        print(f"🚀 Đang test LabelMapper với file: {TEST_METADATA_FILE}")
-        
-        try:
-            # 1. Khởi tạo mapper
-            mapper = LabelMapper(MAT_FILE)
-            
-            # 2. Chạy hàm map_labels
-            mapper.map_labels(TEST_METADATA_FILE, output_dir=OUTPUT_LABEL_DIR)
-            
-            print(f"✅ Test hoàn tất! Kiểm tra kết quả tại thư mục: {OUTPUT_LABEL_DIR}")
-            
-        except Exception as e:
-            print(f"❌ Lỗi khi chạy test: {e}")
-            import traceback
-            traceback.print_exc()
