@@ -28,8 +28,11 @@ All shots belong to the same continuous video segment.
 # Reference Examples
 [[few_shot_examples]]
 
-# Video Data
+# Video Overview (Global Context)
 [[global_context]]
+
+# Local Window to Evaluate
+[[query_content]]
 
 # Final Instruction
 Output ONLY a single integer (0,1,2,3,4,5). No explanation.

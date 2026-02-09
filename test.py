@@ -26,24 +26,31 @@
 #         print("✅ KẾT QUẢ TỐT: Healthy Variance (Độ phân hóa lý tưởng).")
 #     elif adj_sim < 0.90:
 #         print("ℹ️ THÔNG BÁO: Low Similarity (Video có sự thay đổi cảnh rất lớn).")
-
 #     if abs(mean_val) < 0.1:
 #         print("✅ Zero-centered: Tốt cho huấn luyện.")
 
 # # --- CHẠY KIỂM TRA ---
 # # Thay đường dẫn tới38 file của bạn
 # FILE_PATH = "llama_emb/tvsum_sum/user_prompt/user_prompt_pool.h5" 
-# VIDEO_ID = "video_3" # Thay ID video bạn muốn check
+# VIDEO_ID = "video_38" # Thay ID video bạn muốn check
 
 # diagnostic_h5(FILE_PATH, VIDEO_ID)
 
 
 #count  video
-if __name__ == "__main__":
-    import os
-    count_path = "labels"
-    total_files = len([name for name in os.listdir(count_path) if os.path.isfile(os.path.join(count_path, name))])
-    print(f"Tổng số file trong thư mục '{count_path}': {total_files}")
+# if __name__ == "__main__":
+#     import os
+#     count_path = "prompts"
+#     total_files = len([name for name in os.listdir(count_path) if os.path.isfile(os.path.join(count_path, name))])
+#     print(f"Tổng số file trong thư mục '{count_path}': {total_files}")
+
+import h5py
+file_path = "llama_emb/tvsum_sum/gen/gen_pool.h5"
+with h5py.File(file_path, "r") as f:
+    keys = list(f.keys())   # lấy danh sách video_id
+    print("Số video_id:", len(keys))
+    print("Danh sách video_id:")
+    print(keys)
 
 
 
@@ -64,3 +71,8 @@ if __name__ == "__main__":
 # segmenter = VideoSegmenter()
 # res = segmenter.detect_scenes(video_path)
 # print(f"Result: {res}")
+
+
+"""
+'video_1', 'video_10', 'video_11', 'video_12', 'video_13', 'video_17', 'video_18', 'video_2', 'video_20', 'video_21', 'video_23', 'video_28', 'video_3', 'video_32', 'video_33', 'video_34', 'video_35', 'video_36', 'video_37', 'video_38', 'video_4', 'video_41', 'video_42', 'video_44', 'video_46', 'video_49', 'video_5', 'video_50', 'video_6', 'video_7', 'video_8'
+"""

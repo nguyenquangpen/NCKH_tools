@@ -3,7 +3,7 @@ import os
 from video_id_mapper import VideoIdMapper
 
 class PromptGenerator:
-    def __init__(self, window_size=4, config_path="prompt_config.md"):
+    def __init__(self, window_size=8, config_path="prompt_config.md"):
         self.window_size = window_size
         self.config_path = config_path
         self.template = self._load_template()

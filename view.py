@@ -1,8 +1,10 @@
 import cv2
 import json
 import base64
+import h5py
 import os
 import asyncio
+import glob
 from video_segmenter import *
 from websoket import WebSocketClient
 from video_segmenter import VideoSegmenter
@@ -10,12 +12,22 @@ from label_mapper import LabelMapper
 from video_id_mapper import VideoIdMapper
 from prompt_generator import PromptGenerator
 from h5_reader import H5DatasetReader
+from render_video import VideoSummarizer
 
 OUTPUT_DIR = "output"
 PROMPT_DIR = "prompts"
 LABEL_DIR = "labels"
 DATASET_H5_PATH = "dataset/TVSum/TVSum/eccv16_dataset_tvsum_google_pool5.h5"
 LABELMAPPER = "dataset/tvsum50_ver_1_1/ydata-tvsum50-v1_1/ydata-tvsum50-matlab/matlab/ydata-tvsum50.mat"
+LLAMA_H5_PATH = "llama_emb/tvsum_sum/gen/gen_pool.h5"
+CKPT_PATH = "model/ckpt/tvsum_head2_layer3/tvsum/tvsum_split4/best_rho_model/epoch=150-val_sRho=0.336.ckpt"
+CONFIG_ARGS = {
+    'dataset': 'tvsum',
+    'num_heads': 2,
+    'num_layers': 3,
+    'reduced_dim': 2048,
+    'split_idx': 4
+}
 
 for d in [OUTPUT_DIR, PROMPT_DIR, LABEL_DIR]:
     if not os.path.exists(d):
@@ -36,8 +48,19 @@ def save_video_metadata(video_id, result_meta, all_segments):
     return file_path
 
 
+def is_video_h5(video_id):
+    """Check if video ID exists in H5 dataset."""
+    if not os.path.exists(LLAMA_H5_PATH):
+        return False
+    try:
+        with h5py.File(LLAMA_H5_PATH, 'r') as f:
+            return video_id in f
+    except Exception as e:
+        print(f"Error accessing H5 file: {e}")
+        return False
+
 async def _handle_dataset_florence_logic(video_path, ws_client, video_id):
-    """"""
+    """Handle dataset Florence logic."""
     reader = H5DatasetReader(DATASET_H5_PATH)
     change_points = reader.get_video_change_points(video_id)
     if not change_points:
@@ -182,15 +205,21 @@ async def process_llama(video_info, ws_client, traning_mode=True):
         return "skip"
     try:
         cid = video_info["canonical_id"]
+        if is_video_h5(cid):
+            return "skip"
+
         label_path = os.path.join(LABEL_DIR, f"{cid}_labels.json")
-        if os.path.exists(label_path):
+        if not traning_mode and os.path.exists(label_path):
             return "skip" 
+        
         llama_success = await ws_client.run_llama(
             video_info["prompt_path"],
             cid
         )
+
         if not llama_success:
             return "failure_llama"
+        
         if not traning_mode:
             mapper = LabelMapper(LABELMAPPER)
             mapper.map_labels(
@@ -279,10 +308,28 @@ async def run_phase_llama(tasks=None):
         await ws_client.close_ws()
 
 
+async def run_phase_render(video_path):
+    summarizer = VideoSummarizer(CKPT_PATH, CONFIG_ARGS)
+    for v_path in video_path:
+        cid = VideoIdMapper.get_canonical_id(os.path.basename(v_path))
+        ouput_video = os.path.join(OUTPUT_DIR, f"{cid}_summary.mp4")
+        if os.path.exists(ouput_video):
+            print(f"⏭️ Skipping rendering for {cid}, summary already exists.")
+            continue
+
+        print(f"📽️ Rendering summary for: {cid}")
+        scores = summarizer.get_scores(LLAMA_H5_PATH, cid)
+        if scores is None:
+            selected_idx, cps = summarizer.select_shots(cid, scores)
+            summarizer.render(v_path, selected_idx, cps, ouput_video)
+            print(f"✅ Summary video saved: {ouput_video}")
+
+
 if __name__ == "__main__":
     import glob
-    RUN_PHASE_1 = True
-    RUN_PHASE_2 = False
+    RUN_PHASE_1 = False
+    RUN_PHASE_2 = True
+    RUN_PHASE_3 = False
 
     if RUN_PHASE_1:
         VIDEO_DIR = "dataset/tvsum50_ver_1_1/ydata-tvsum50-v1_1/ydata-tvsum50-video/video" 
@@ -293,3 +340,7 @@ if __name__ == "__main__":
     if RUN_PHASE_2:
         print(f"\n--- STARTING PHASE 2: LLAMA-3 FOR ALL SUCCESSFUL VIDEOS ---")
         asyncio.run(run_phase_llama())
+    
+    if RUN_PHASE_3:
+        print(f"\n--- STARTING PHASE 3: RENDERING SUMMARY VIDEOS ---")
+        asyncio.run(run_phase_render(video_paths))
