@@ -6,7 +6,7 @@ import argparse
 import json
 from model.networks.model import LLMVS
 from model.utils.configs import Config
-from model.utils.knapsack_implementation import knapsack_optim 
+from model.utils.knapsack_implementation import knapSack 
 from moviepy.editor import VideoFileClip, concatenate_videoclips
 
 
@@ -42,7 +42,7 @@ class VideoSummarizer:
         if len(probs) != len(short_lengths):
             probs = np.interp(np.linspace(0, 1, len(short_lengths)), np.linspace(0, 1, len(probs)), probs)
         max_len = int(n_frames * ratio)
-        selected = knapsack_optim(probs, short_lengths, n_shots=len(probs), max_len=max_len)
+        selected = knapSack(int(max_len), short_lengths, probs, len(probs))
         return selected, cps
     
     def render(self, input_mp4, selected_indices, cps, output_path):

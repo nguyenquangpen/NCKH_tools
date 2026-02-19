@@ -44,15 +44,13 @@
 #     total_files = len([name for name in os.listdir(count_path) if os.path.isfile(os.path.join(count_path, name))])
 #     print(f"Tổng số file trong thư mục '{count_path}': {total_files}")
 
-import h5py
-file_path = "llama_emb/tvsum_sum/gen/gen_pool.h5"
-with h5py.File(file_path, "r") as f:
-    keys = list(f.keys())   # lấy danh sách video_id
-    print("Số video_id:", len(keys))
-    print("Danh sách video_id:")
-    print(keys)
-
-
+# import h5py
+# file_path = "llama_emb/tvsum_sum/gen/gen_pool.h5"
+# with h5py.File(file_path, "r") as f:
+#     keys = list(f.keys())   # lấy danh sách video_id
+#     print("Số video_id:", len(keys))
+#     print("Danh sách video_id:")
+#     print(keys)
 
 # import cv2
 # from video_segmenter import VideoSegmenter

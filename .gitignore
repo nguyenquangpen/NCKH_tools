@@ -2,7 +2,7 @@
 dataset/
 output/
 __pycache__/
-preview_scenes/
+preview/
 prompts/
 labels/
 llama_emb_paper/

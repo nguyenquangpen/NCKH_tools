@@ -14,8 +14,8 @@ class WebSocketClient:
             print("Connecting to:", self.ws_url)
             self.ws_connect = await websockets.connect(
                 self.ws_url,
-                ping_interval=None,
-                ping_timeout=None,
+                ping_interval=60,
+                ping_timeout=300,
                 max_size=None
             )
             print("✅ Connected to Server")

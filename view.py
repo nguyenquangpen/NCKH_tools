@@ -23,6 +23,8 @@ LLAMA_H5_PATH = "llama_emb/tvsum_sum/gen/gen_pool.h5"
 CKPT_PATH = "model/ckpt/tvsum_head2_layer3/tvsum/tvsum_split4/best_rho_model/epoch=150-val_sRho=0.336.ckpt"
 CONFIG_ARGS = {
     'dataset': 'tvsum',
+    'model': 'LLMVS',
+    'tag': 'inference',
     'num_heads': 2,
     'num_layers': 3,
     'reduced_dim': 2048,
@@ -159,7 +161,7 @@ async def _handle_florence_logic(video_path, ws_client, video_id):
         return None
     
 
-async def process_florence(video_path, ws_client, use_dataset_mode=True):
+async def process_florence(video_path, ws_client, use_dataset_mode=False):
     try:
         video_filename = os.path.basename(video_path)
         canonical_id = VideoIdMapper.get_canonical_id(video_filename)
@@ -200,7 +202,7 @@ async def process_florence(video_path, ws_client, use_dataset_mode=True):
         return {"status": "error", "msg": str(e)}
 
 
-async def process_llama(video_info, ws_client, traning_mode=True):
+async def process_llama(video_info, ws_client, traning_mode=False):
     if video_info["status"] != "success":
         return "skip"
     try:
@@ -220,12 +222,16 @@ async def process_llama(video_info, ws_client, traning_mode=True):
         if not llama_success:
             return "failure_llama"
         
-        if not traning_mode:
+        is_dataset_video = cid.startswith("video_") and cid.replace("video_", "").isdigit()
+
+        if not traning_mode and is_dataset_video:
             mapper = LabelMapper(LABELMAPPER)
             mapper.map_labels(
                 video_info["meta_path"],
                 output_dir=LABEL_DIR
             )
+        else:
+            print(f"⚠️ Skipping label mapping for {cid} (not a dataset video or in training mode)")
         return "success"
     except Exception as e:
         print(f"❌ Error during Llama processing: {e}")
@@ -319,26 +325,29 @@ async def run_phase_render(video_path):
 
         print(f"📽️ Rendering summary for: {cid}")
         scores = summarizer.get_scores(LLAMA_H5_PATH, cid)
-        if scores is None:
+        if scores is not None:
             selected_idx, cps = summarizer.select_shots(cid, scores)
             summarizer.render(v_path, selected_idx, cps, ouput_video)
             print(f"✅ Summary video saved: {ouput_video}")
+        else:
+            print(f"⚠️ No Llama scores found for {cid}, skipping rendering.")
 
 
 if __name__ == "__main__":
     import glob
+    video_paths = ["preview\852415-hd_1280_720_24fps.mp4"]
     RUN_PHASE_1 = False
-    RUN_PHASE_2 = True
-    RUN_PHASE_3 = False
+    RUN_PHASE_2 = False
+    RUN_PHASE_3 = True
 
     if RUN_PHASE_1:
-        VIDEO_DIR = "dataset/tvsum50_ver_1_1/ydata-tvsum50-v1_1/ydata-tvsum50-video/video" 
-        video_paths = glob.glob(os.path.join(VIDEO_DIR, "*.mp4"), recursive=True)
+        # VIDEO_DIR = "preview\videoAnimal.mp4" 
+        # video_paths = glob.glob(os.path.join(VIDEO_DIR, "*.mp4"), recursive=True)
         print(f"--- STARTING PHASE 1: FLORENCE-2 FOR ALL VIDEOS ---")
         asyncio.run(run_phase_florence(video_paths))
         
     if RUN_PHASE_2:
-        print(f"\n--- STARTING PHASE 2: LLAMA-3 FOR ALL SUCCESSFUL VIDEOS ---")
+        print(f"\n--- STARTING PHASE 2: LLAMA-2 FOR ALL SUCCESSFUL VIDEOS ---")
         asyncio.run(run_phase_llama())
     
     if RUN_PHASE_3:
