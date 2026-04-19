@@ -27,6 +27,7 @@ CONFIG_ARGS = {
     'tag': 'inference',
     'num_heads': 2,
     'num_layers': 3,
+    'input_dim': 4096,
     'reduced_dim': 2048,
     'split_idx': 4
 }
@@ -335,7 +336,7 @@ async def run_phase_render(video_path):
 
 if __name__ == "__main__":
     import glob
-    video_paths = ["preview\852415-hd_1280_720_24fps.mp4"]
+    video_paths = ["preview\input_video_1.mp4"]
     RUN_PHASE_1 = False
     RUN_PHASE_2 = False
     RUN_PHASE_3 = True
@@ -347,7 +348,7 @@ if __name__ == "__main__":
         asyncio.run(run_phase_florence(video_paths))
         
     if RUN_PHASE_2:
-        print(f"\n--- STARTING PHASE 2: LLAMA-2 FOR ALL SUCCESSFUL VIDEOS ---")
+        print(f"\n--- STARTING PHASE 2: LLAMA-3 FOR ALL SUCCESSFUL VIDEOS ---")
         asyncio.run(run_phase_llama())
     
     if RUN_PHASE_3:

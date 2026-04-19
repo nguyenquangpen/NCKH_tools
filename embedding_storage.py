@@ -12,6 +12,7 @@ def save_llama_embeddings(video_id, x1, x2, base_dir="llama_emb/tvsum_sum"):
         os.makedirs(os.path.dirname(gen_path), exist_ok=True)
 
         def write_batch_to_h5(file_path, v_id, embedding_data):
+            print(f"DEBUG STORAGE: video {v_id} | data shape: {np.array(embedding_data).shape}")
             data_to_append = np.array(embedding_data)[:, np.newaxis, :].astype(np.float16)
             
             with h5py.File(file_path, 'a') as f:
